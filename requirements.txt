@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+httpx
+chromadb
+transformers
+torch
+jupyterlab
+mlflow
+psycopg2-binary
+sqlalchemy
