@@ -21,25 +21,62 @@ services:
       - "8000:8000"
 
   opensearch:
-    image: opensearchproject/opensearch:1.3.0
+    # https://hub.docker.com/r/opensearchproject/opensearch
+    image: opensearchproject/opensearch:2.6.0
     container_name: opensearch
     environment:
+      - cluster.name=opensearch
       - discovery.type=single-node
-      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    volumes:
-      - opensearch-data:/usr/share/opensearch/data
+      - plugins.security.disabled=true
+      # Disable JVM heap memory swapping
+      - bootstrap.memory_lock=true
+      - plugins.ml_commons.only_run_on_ml_node=false
+      # https://forum.opensearch.org/t/error-while-loading-ml-model-in-elasticsearch/13893
+      - plugins.ml_commons.native_memory_threshold=100
+      - "OPENSEARCH_JAVA_OPTS=-Xms256m -Xmx256m"
     ports:
       - "9200:9200"
-      - "9600:9600"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9200"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+    volumes:
+      - opensearch-volume:/usr/share/opensearch/data
+    restart: unless-stopped
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.6.0
+    container_name: opensearch-dashboards
+    environment:
+      - "OPENSEARCH_HOSTS=[\"http://opensearch:9200\"]"
+      - "DISABLE_SECURITY_DASHBOARDS_PLUGIN=true"
+    ports:
+      - "5601:5601"
+    depends_on:
+      - opensearch
+    restart: unless-stopped
+
+  # mlflow:
+  #   image: ghcr.io/mlflow/mlflow:v2.10.2
+  #   container_name: mlflow
+  #   ports:
+  #       - "5000:5000"
+  #   volumes:
+  #     - ./mlruns:/mlruns
+  #   command: mlflow server --host 0.0.0.0
+  #   restart: unless-stopped
+
+  vault-server:
+    image: hashicorp/vault:1.10.11
+    container_name: vault-server
+    ports:
+      - '8200:8200'
+    environment:
+      VAULT_ADDR: 'http://0.0.0.0:8200'
+      VAULT_DEV_ROOT_TOKEN_ID: 'root-token'
+      VAULT_LOCAL_CONFIG: >
+        {
+            "default_lease_ttl": "168h",
+            "max_lease_ttl": "720h",
+            "disable_mlock": true
+        }
+    restart: unless-stopped
 
   postgres:
     image: postgres:13
@@ -64,6 +101,6 @@ services:
       - mlflow-data:/mlflow
 
 volumes:
-  opensearch-data:
+  opensearch-volume:
   postgres-data:
   mlflow-data:
